@@ -1,14 +1,12 @@
 import os
 import time
-import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pymongo import MongoClient
+import asyncio
 from fastapi import FastAPI
-import uvicorn
-import threading
 
-# Delay to sync client time
+# ডিলে যোগ করা হচ্ছে যাতে সঠিক সময় সিঙ্ক হয়
 time.sleep(5)
 os.environ['TZ'] = 'UTC'
 time.tzset()
@@ -19,18 +17,16 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 MONGO_URI = os.environ.get("MONGO_URI")
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
 
+# MongoDB ইনিশিয়ালাইজ করা হচ্ছে
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client["movie_bot"]
 collection = db["movies"]
 
-app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# FastAPI অ্যাপ ইনিশিয়ালাইজ করা হচ্ছে
+app = FastAPI()
 
-# FastAPI web server to keep Render/Koyeb alive
-web_app = FastAPI()
-
-@web_app.get("/")
-def home():
-    return {"message": "Bot is running!"}
+# Pyrogram bot ইনিশিয়ালাইজ করা হচ্ছে
+bot = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 @app.on_message(filters.private & filters.command("start"))
 async def start_handler(client, message: Message):
@@ -43,7 +39,7 @@ async def search_movie(client, message: Message):
     
     if result:
         try:
-            sent = await app.forward_messages(
+            sent = await bot.forward_messages(
                 chat_id=message.chat.id,
                 from_chat_id=CHANNEL_ID,
                 message_ids=result["message_id"]
@@ -70,7 +66,7 @@ async def suggestion_click(client, callback_query: CallbackQuery):
     
     if result:
         try:
-            sent = await app.forward_messages(
+            sent = await bot.forward_messages(
                 chat_id=callback_query.message.chat.id,
                 from_chat_id=CHANNEL_ID,
                 message_ids=message_id
@@ -95,13 +91,9 @@ async def save_channel_messages(client, message: Message):
             )
             print(f"Saved: {text[:40]}...")
 
-def start_bot():
-    asyncio.run(app.start())
-    app.idle()
-
-def start_web():
-    uvicorn.run(web_app, host="0.0.0.0", port=8000)
-
+# Pyrogram bot এবং FastAPI একই ইভেন্ট লুপে চলবে
 if __name__ == "__main__":
-    threading.Thread(target=start_bot).start()
-    start_web()
+    import uvicorn
+    loop = asyncio.get_event_loop()
+    loop.create_task(bot.start())  # Pyrogram bot শুরু
+    uvicorn.run(app, host="0.0.0.0", port=8000)  # FastAPI সার্ভার চালানো
