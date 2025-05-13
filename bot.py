@@ -1,25 +1,35 @@
 import os
 import time
 import asyncio
+import threading
+from fastapi import FastAPI
+import uvicorn
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pymongo import MongoClient
 
-time.sleep(5)  # delay to avoid msg_id sync issue
+# টাইম ঠিক করার জন্য
+time.sleep(5)
 os.environ['TZ'] = 'UTC'
 time.tzset()
 
+# ENV variables
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 MONGO_URI = os.environ.get("MONGO_URI")
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))
 
+# MongoDB
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client["movie_bot"]
 collection = db["movies"]
 
+# Pyrogram client
 app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+
+# FastAPI
+api = FastAPI()
 
 @app.on_message(filters.private & filters.command("start"))
 async def start_handler(client, message: Message):
@@ -84,4 +94,17 @@ async def save_channel_messages(client, message: Message):
             )
             print(f"Saved: {text[:40]}...")
 
-app.run()
+# Pyrogram বট চালু করার জন্য আলাদা থ্রেড
+def start_bot():
+    app.run()
+
+# FastAPI root path
+@api.get("/")
+def home():
+    return {"message": "Bot is running!"}
+
+# Main
+if __name__ == "__main__":
+    bot_thread = threading.Thread(target=start_bot)
+    bot_thread.start()
+    uvicorn.run(api, host="0.0.0.0", port=8000)
