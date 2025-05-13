@@ -24,23 +24,25 @@ app = Client(
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
     await message.reply_text(
-        "হ্যালো! আমি মুভি সার্চ বট (MongoDB বেসড)।\n\nযেকোনো মুভির নাম লিখো, আমি তোমার জন্য খুঁজে আনবো!"
+        "হ্যালো! আমি লিংক সার্চ বট!\n\nচ্যানেলে মুভির নাম সহ লিংক পোস্ট করো, আর সার্চ করলেই আমি সেটা খুঁজে এনে দিব!"
     )
 
-@app.on_message(filters.channel & filters.document)
-async def save_movie(client, message: Message):
+@app.on_message(filters.channel)
+async def index_channel_message(client, message: Message):
     if message.chat.username.lower() == CHANNEL_USERNAME.lower():
-        data = {
-            "file_name": message.document.file_name,
-            "message_id": message.message_id
-        }
-        collection.insert_one(data)
-        print(f"Saved: {data['file_name']}")
+        text = message.text or message.caption
+        if text:
+            data = {
+                "text": text,
+                "message_id": message.id
+            }
+            collection.insert_one(data)
+            print(f"Saved: {text[:30]}...")
 
 @app.on_message(filters.text & ~filters.command("start"))
 async def search_movie(client, message: Message):
     query = message.text.strip()
-    results = collection.find({"file_name": {"$regex": query, "$options": "i"}}).limit(5)
+    results = collection.find({"text": {"$regex": query, "$options": "i"}}).limit(5)
 
     found = False
     for result in results:
@@ -52,9 +54,9 @@ async def search_movie(client, message: Message):
                 message_ids=result["message_id"]
             )
         except Exception as e:
-            await message.reply_text(f"ফরওয়ার্ডে সমস্যা: {e}")
+            await message.reply_text(f"ফরওয়ার্ড করতে সমস্যা: {e}")
 
     if not found:
-        await message.reply_text("দুঃখিত! কিছুই খুঁজে পাইনি।")
+        await message.reply_text("দুঃখিত, কিছুই খুঁজে পাইনি!")
 
 app.run()
