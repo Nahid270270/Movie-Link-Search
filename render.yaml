@@ -14,4 +14,4 @@ services:
       - key: MONGO_URI
         value: your_mongo_uri
       - key: CHANNEL_ID
-        value: "-100xxxxxxxxx"
+        value: "-100xxxxxxxxxx"
