@@ -1,6 +1,9 @@
 services:
   - type: worker
-    name: movie-bot-worker
+    name: your-bot-name
     env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "python bot.py"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: TZ
+        value: UTC
