@@ -25,13 +25,19 @@ async def search_movie(client, message: Message):
     query = message.text.strip()
     results = []
 
-    async for msg in app.search_messages(CHANNEL_USERNAME, query=query, limit=5):
-        results.append(msg)
+    try:
+        # Search messages in the channel
+        async for msg in app.search_messages(CHANNEL_USERNAME, query=query, limit=5):
+            if msg.document:  # Check if the message has a file (movie)
+                results.append(msg)
 
-    if not results:
-        await message.reply_text("দুঃখিত! কিছুই খুঁজে পাইনি।")
-    else:
-        for msg in results:
-            await msg.copy(chat_id=message.chat.id)
+        if not results:
+            await message.reply_text("দুঃখিত! কিছুই খুঁজে পাইনি।")
+        else:
+            for msg in results:
+                await msg.copy(chat_id=message.chat.id)
+
+    except Exception as e:
+        await message.reply_text(f"Error: {e}")
 
 app.run()
