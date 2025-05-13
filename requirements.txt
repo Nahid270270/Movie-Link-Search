@@ -1,4 +1,5 @@
 pyrogram
 tgcrypto
 pymongo[srv]
-dnspython
+fastapi
+uvicorn
