@@ -8,7 +8,7 @@ threading.Thread(target=start_web).start()
 
 Pyrogram Bot Setup
 
-API_ID = int(os.environ.get("API_ID")) API_HASH = os.environ.get("API_HASH") BOT_TOKEN = os.environ.get("BOT_TOKEN")) MONGO_URI = os.environ.get("MONGO_URI")) CHANNEL_ID = int(os.environ.get("CHANNEL_ID")) ADMINS = [int(x) for x in os.environ.get("ADMINS", "8172129114").split()]
+API_ID = int(os.environ.get("API_ID")) API_HASH = os.environ.get("API_HASH") BOT_TOKEN = os.environ.get("BOT_TOKEN")) MONGO_URI = os.environ.get("MONGO_URI")) CHANNEL_ID = int(os.environ.get("CHANNEL_ID")) ADMINS = [int(x) for x in os.environ.get("ADMINS", "").split()]
 
 mongo_client = MongoClient(MONGO_URI) db = mongo_client["movie_bot"] collection = db["movies"] user_collection = db["users"]
 
