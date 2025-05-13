@@ -1,14 +1,8 @@
 import os
-import time
 import asyncio
-from fastapi import FastAPI
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pymongo import MongoClient
-from threading import Thread
-
-# FastAPI App
-app = FastAPI()
 
 # Pyrogram Bot Setup
 API_ID = int(os.environ.get("API_ID"))
@@ -23,11 +17,11 @@ collection = db["movies"]
 
 pyrogram_app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-@app.on_message(filters.private & filters.command("start"))
+@pyrogram_app.on_message(filters.private & filters.command("start"))
 async def start_handler(client, message: Message):
     await message.reply_text("হ্যালো! আমি মুভি লিংক সার্চ বট!\n\nমুভির নাম লিখো, আমি খুঁজে এনে দিব!")
 
-@app.on_message(filters.text & filters.private & ~filters.command("start"))
+@pyrogram_app.on_message(filters.text & filters.private & ~filters.command("start"))
 async def search_movie(client, message: Message):
     query = message.text.strip()
     result = collection.find_one({"text": {"$regex": f"^{query}$", "$options": "i"}})
@@ -54,7 +48,7 @@ async def search_movie(client, message: Message):
         else:
             await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!")
 
-@app.on_callback_query(filters.regex("^id_"))
+@pyrogram_app.on_callback_query(filters.regex("^id_"))
 async def suggestion_click(client, callback_query: CallbackQuery):
     message_id = int(callback_query.data.replace("id_", ""))
     result = collection.find_one({"message_id": message_id})
@@ -74,7 +68,7 @@ async def suggestion_click(client, callback_query: CallbackQuery):
     else:
         await callback_query.message.reply_text("মুভিটি খুঁজে পাওয়া যায়নি!")
 
-@app.on_message(filters.channel)
+@pyrogram_app.on_message(filters.channel)
 async def save_channel_messages(client, message: Message):
     if message.chat.id == CHANNEL_ID:
         text = message.text or message.caption
@@ -86,22 +80,6 @@ async def save_channel_messages(client, message: Message):
             )
             print(f"Saved: {text[:40]}...")
 
-# FastAPI Startup
-def start_fastapi():
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
-# Pyrogram Bot Start
-def start_pyrogram():
-    pyrogram_app.run()
-
-# Running both FastAPI and Pyrogram in separate threads
+# Running Pyrogram bot
 if __name__ == "__main__":
-    thread_fastapi = Thread(target=start_fastapi)
-    thread_pyrogram = Thread(target=start_pyrogram)
-
-    thread_fastapi.start()
-    thread_pyrogram.start()
-
-    thread_fastapi.join()
-    thread_pyrogram.join()
+    pyrogram_app.run()
