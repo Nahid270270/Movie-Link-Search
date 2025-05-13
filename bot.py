@@ -2,23 +2,20 @@ from pyrogram import Client, filters
 from pyrogram.types import Message
 import os
 from pymongo import MongoClient
+import asyncio  # সময় বিলম্বের জন্য
 
-# Load environment variables safely
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 MONGO_URI = os.environ.get("MONGO_URI")
-CHANNEL_USERNAME = os.environ.get("CHANNEL_USERNAME").replace("@", "")  # Remove @ if given
+CHANNEL_ID = int(os.environ.get("CHANNEL_ID"))  # Example: -1001234567890
+DEFAULT_DELETE_TIME = int(os.environ.get("DEFAULT_DELETE_TIME", 300))  # Default 5 mins (300 seconds)
 
-# MongoDB connection
-if not MONGO_URI:
-    raise Exception("MONGO_URI is not set. Please set it in your environment.")
-
+# MongoDB ইনিশিয়ালাইজ
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client["movie_bot"]
 collection = db["movies"]
 
-# Initialize bot client
 app = Client(
     "MongoMovieSearchBot",
     api_id=API_ID,
@@ -26,30 +23,24 @@ app = Client(
     bot_token=BOT_TOKEN
 )
 
-# /start command handler
 @app.on_message(filters.command("start"))
 async def start(client, message: Message):
     await message.reply_text(
-        "হ্যালো! আমি লিংক সার্চ বট!\n\nচ্যানেলে মুভির নাম সহ লিংক পোস্ট করো, আর সার্চ করলেই আমি সেটা খুঁজে এনে দিব!"
+        "স্বাগতম!\n\nএই বট দ্বারা আপনি আমাদের চ্যানেলে পোস্ট করা মুভিগুলোর নাম সার্চ করে সরাসরি লিংক পেতে পারেন।\n\nযেকোনো মুভির নাম লিখুন আর দেখুন ম্যাজিক!"
     )
 
-# Channel message indexer
 @app.on_message(filters.channel)
 async def index_channel_message(client, message: Message):
-    try:
-        if message.chat.username and message.chat.username.lower() == CHANNEL_USERNAME.lower():
-            text = message.text or message.caption
-            if text:
-                data = {
-                    "text": text,
-                    "message_id": message.id
-                }
-                collection.update_one({"message_id": message.id}, {"$set": data}, upsert=True)
-                print(f"Saved: {text[:30]}...")
-    except Exception as e:
-        print(f"Indexing error: {e}")
+    if message.chat.id == CHANNEL_ID:
+        text = message.text or message.caption
+        if text:
+            data = {
+                "text": text,
+                "message_id": message.id
+            }
+            collection.insert_one(data)
+            print(f"Saved: {text[:30]}...")
 
-# Text message search
 @app.on_message(filters.text & ~filters.command("start"))
 async def search_movie(client, message: Message):
     query = message.text.strip()
@@ -59,16 +50,37 @@ async def search_movie(client, message: Message):
     for result in results:
         found = True
         try:
-            await app.forward_messages(
+            sent = await app.forward_messages(
                 chat_id=message.chat.id,
-                from_chat_id=f"@{CHANNEL_USERNAME}",
+                from_chat_id=CHANNEL_ID,
                 message_ids=result["message_id"]
             )
+            # ৫ মিনিট (ডিফল্ট) পর অটো ডিলিট করবে
+            delete_time = DEFAULT_DELETE_TIME  # Default time in seconds
+            if len(message.text.split()) > 1:
+                # যদি ইউজার কাস্টম টাইম দিতে চায়
+                try:
+                    custom_time = int(message.text.split()[1])
+                    delete_time = custom_time if custom_time > 0 else DEFAULT_DELETE_TIME
+                except ValueError:
+                    pass
+
+            await asyncio.sleep(delete_time)
+            await sent.delete()
         except Exception as e:
             await message.reply_text(f"ফরওয়ার্ড করতে সমস্যা: {e}")
 
     if not found:
         await message.reply_text("দুঃখিত, কিছুই খুঁজে পাইনি!")
 
-# Start the bot
+@app.on_message(filters.command("deleteall"))
+async def delete_all_messages(client, message: Message):
+    if message.chat.id == CHANNEL_ID:
+        async for msg in app.get_chat_history(message.chat.id):
+            try:
+                await msg.delete()
+            except Exception as e:
+                print(f"Error deleting message: {e}")
+        await message.reply_text("সব মেসেজ ডিলিট করা হয়েছে!")
+
 app.run()
