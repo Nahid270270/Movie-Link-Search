@@ -1,8 +1,18 @@
 import os
 import asyncio
+import threading
+from http.server import SimpleHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pymongo import MongoClient
+
+# Start a simple web server for Koyeb health check
+def start_web():
+    server = HTTPServer(("0.0.0.0", 8000), SimpleHTTPRequestHandler)
+    print("Web server running on port 8000")
+    server.serve_forever()
+
+threading.Thread(target=start_web).start()
 
 # Pyrogram Bot Setup
 API_ID = int(os.environ.get("API_ID"))
@@ -80,6 +90,6 @@ async def save_channel_messages(client, message: Message):
             )
             print(f"Saved: {text[:40]}...")
 
-# Running Pyrogram bot
+# Run the bot
 if __name__ == "__main__":
     pyrogram_app.run()
