@@ -183,15 +183,8 @@ async def group_search_movie(client, message: Message):
         buttons = [
             [InlineKeyboardButton(movie["text"][:30], callback_data=f"id_{movie['message_id']}")]
             for movie in suggestions
-        ]
-
-        # Add group and channel buttons
-        buttons.append([
-            InlineKeyboardButton("➕ Add to Group", url="https://t.me/YourGroupLink"),
-            InlineKeyboardButton("📢 Update Channel", url="https://t.me/YourChannelLink")
-        ])
-
-        if collection.count_documents({"text": {"$regex": query, "$options": "i"}}) > 0:
+    
+       if collection.count_documents({"text": {"$regex": query, "$options": "i"}}) > 0:
             await message.reply("আপনি কি নিচের কোনটি খুঁজছেন?", reply_markup=InlineKeyboardMarkup(buttons))
         else:
             await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!", reply_markup=InlineKeyboardMarkup(buttons))
