@@ -33,7 +33,14 @@ pyrogram_app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BO
 @pyrogram_app.on_message(filters.private & filters.command("start"))
 async def start_handler(client, message: Message):
     user_collection.update_one({"user_id": message.from_user.id}, {"$set": {"user_id": message.from_user.id}}, upsert=True)
-    await message.reply_text("হ্যালো! আমি মুভি লিংক সার্চ বট!\n\nমুভির নাম লিখো, আমি খুঁজে এনে দিব!")
+    await message.reply_text("হ্যালো! আমি মুভি লিংক সার্চ বট!\n\nমুভির নাম লিখো, আমি খুঁজে এনে দিব!",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("➕ Add to Group", url=f"https://t.me/{client.me.username}?startgroup=true"),
+                InlineKeyboardButton("📢 Update Channel", url="https://t.me/YourChannelLink")
+            ]
+        ])
+    )
 
 @pyrogram_app.on_message(filters.private & filters.command("help"))
 async def help_handler(client, message: Message):
@@ -109,16 +116,10 @@ async def search_movie(client, message: Message):
             for movie in suggestions
         ]
 
-        # Add group and channel buttons at the bottom
-        buttons.append([
-            InlineKeyboardButton("➕ Add to Group", url="https://t.me/YourGroupLink"),
-            InlineKeyboardButton("📢 Update Channel", url="https://t.me/YourChannelLink")
-        ])
-
         if collection.count_documents({"text": {"$regex": query, "$options": "i"}}) > 0:
             await message.reply("আপনি কি নিচের কোনটি খুঁজছেন?", reply_markup=InlineKeyboardMarkup(buttons))
         else:
-            await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!", reply_markup=InlineKeyboardMarkup(buttons))
+            await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!")
 
 @pyrogram_app.on_callback_query(filters.regex("^id_"))
 async def suggestion_click(client, callback_query: CallbackQuery):
@@ -161,7 +162,7 @@ async def check_requests(client, message: Message):
         response += f"মুভি: {request['query']}, ইউজাররা: {users}\n"
     await message.reply_text(response)
 
-# Group support added here
+# Group support
 @pyrogram_app.on_message(filters.group & filters.text & ~filters.command(["start", "help", "stats", "delete_all", "broadcast"]))
 async def group_search_movie(client, message: Message):
     query = message.text.strip()
@@ -183,11 +184,12 @@ async def group_search_movie(client, message: Message):
         buttons = [
             [InlineKeyboardButton(movie["text"][:30], callback_data=f"id_{movie['message_id']}")]
             for movie in suggestions
-    
-       if collection.count_documents({"text": {"$regex": query, "$options": "i"}}) > 0:
+        ]
+
+        if collection.count_documents({"text": {"$regex": query, "$options": "i"}}) > 0:
             await message.reply("আপনি কি নিচের কোনটি খুঁজছেন?", reply_markup=InlineKeyboardMarkup(buttons))
         else:
-            await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!", reply_markup=InlineKeyboardMarkup(buttons))
+            await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!")
 
 # Run the bot
 if __name__ == "__main__":
