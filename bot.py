@@ -31,8 +31,27 @@ pyrogram_app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BO
 
 @pyrogram_app.on_message(filters.private & filters.command("start"))
 async def start_handler(client, message: Message):
-    user_collection.update_one({"user_id": message.from_user.id}, {"$set": {"user_id": message.from_user.id}}, upsert=True)
-    await message.reply_text("হ্যালো! আমি মুভি লিংক সার্চ বট!\n\nমুভির নাম লিখো, আমি খুঁজে এনে দিব!")
+    user_collection.update_one(
+        {"user_id": message.from_user.id},
+        {"$set": {"user_id": message.from_user.id}},
+        upsert=True
+    )
+
+    buttons = [
+        [
+            InlineKeyboardButton("চ্যানেল", url="https://t.me/YourChannelUsername"),
+            InlineKeyboardButton("গ্রুপ", url="https://t.me/YourGroupUsername")
+        ],
+        [
+            InlineKeyboardButton("বট", url="https://t.me/YourBotUsername"),
+            InlineKeyboardButton("ক্রিকেট", url="https://t.me/YourCricketChannel")
+        ]
+    ]
+
+    await message.reply_text(
+        "হ্যালো! আমি মুভি লিংক সার্চ বট!\n\nমুভির নাম লিখো, আমি খুঁজে এনে দিব!",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
 
 @pyrogram_app.on_message(filters.private & filters.command("help"))
 async def help_handler(client, message: Message):
