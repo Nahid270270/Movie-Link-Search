@@ -29,6 +29,7 @@ user_collection = db["users"]
 
 pyrogram_app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
+# /start with image and buttons
 @pyrogram_app.on_message(filters.private & filters.command("start"))
 async def start_handler(client, message: Message):
     user_collection.update_one(
@@ -37,21 +38,21 @@ async def start_handler(client, message: Message):
         upsert=True
     )
 
-    buttons = [
-        [
-            InlineKeyboardButton("চ্যানেল", url="https://t.me/YourChannelUsername"),
-            InlineKeyboardButton("গ্রুপ", url="https://t.me/YourGroupUsername")
-        ],
-        [
-            InlineKeyboardButton("বট", url="https://t.me/YourBotUsername"),
-            InlineKeyboardButton("ক্রিকেট", url="https://t.me/YourCricketChannel")
-        ]
-    ]
+    photo_url = "https://te.legra.ph/file/6a920e5b8f962ebc21c29.jpg"  # ইমেজ URL
 
-    await message.reply_text(
-        "হ্যালো! আমি মুভি লিংক সার্চ বট!\n\nমুভির নাম লিখো, আমি খুঁজে এনে দিব!",
-        reply_markup=InlineKeyboardMarkup(buttons)
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ আমাদের গ্রুপ", url="https://t.me/YourGroupLink")],
+        [InlineKeyboardButton("📢 আমাদের চ্যানেল", url="https://t.me/YourChannelLink")],
+        [InlineKeyboardButton("🏏 ক্রিকেটার গ্রুপ", url="https://t.me/CricketerGroupLink")],
+        [InlineKeyboardButton("✉️ রিকোয়েস্ট গ্রুপ", url="https://t.me/RequestGroupLink")]
+    ])
+
+    caption = (
+        "হ্যালো! আমি মুভি লিংক সার্চ বট!\n\n"
+        "মুভির নাম লিখো, আমি খুঁজে এনে দিব!"
     )
+
+    await message.reply_photo(photo=photo_url, caption=caption, reply_markup=buttons)
 
 @pyrogram_app.on_message(filters.private & filters.command("help"))
 async def help_handler(client, message: Message):
@@ -86,7 +87,8 @@ async def broadcast_handler(client, message: Message):
 
     await message.reply_text(f"✅ সফল: {success}\n❌ ব্যর্থ: {failed}")
 
-@pyrogram_app.on_message(filters.text & filters.private & ~filters.command(["start", "help", "stats", "delete_all", "broadcast"]))
+# গ্রুপ ও প্রাইভেট উভয় জায়গা থেকে সার্চ সাপোর্ট
+@pyrogram_app.on_message(filters.text & (filters.private | filters.group) & ~filters.command(["start", "help", "stats", "delete_all", "broadcast"]))
 async def search_movie(client, message: Message):
     query = message.text.strip()
     result = collection.find_one({"text": {"$regex": f"^{query}$", "$options": "i"}})
