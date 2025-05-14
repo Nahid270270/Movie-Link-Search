@@ -26,20 +26,14 @@ mongo_client = MongoClient(MONGO_URI)
 db = mongo_client["movie_bot"]
 collection = db["movies"]
 user_collection = db["users"]
-not_found_collection = db["not_found"]
+not_found_collection = db["not_found"]  # Collection for logging failed movie searches
 
 pyrogram_app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 @pyrogram_app.on_message(filters.private & filters.command("start"))
 async def start_handler(client, message: Message):
     user_collection.update_one({"user_id": message.from_user.id}, {"$set": {"user_id": message.from_user.id}}, upsert=True)
-    buttons = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("➕ Add To Group", url=f"https://t.me/{client.me.username}?startgroup=true")],
-            [InlineKeyboardButton("🔄 Update Channel", url="https://t.me/YOUR_CHANNEL_USERNAME")]
-        ]
-    )
-    await message.reply_text("হ্যালো! আমি মুভি লিংক সার্চ বট!\n\nমুভির নাম লিখো, আমি খুঁজে এনে দিব!", reply_markup=buttons)
+    await message.reply_text("হ্যালো! আমি মুভি লিংক সার্চ বট!\n\nমুভির নাম লিখো, আমি খুঁজে এনে দিব!")
 
 @pyrogram_app.on_message(filters.private & filters.command("help"))
 async def help_handler(client, message: Message):
@@ -81,7 +75,7 @@ async def search_movie(client, message: Message):
 
     if result:
         try:
-            sent = await client.forward_messages(
+            sent = await pyrogram_app.forward_messages(
                 chat_id=message.chat.id,
                 from_chat_id=CHANNEL_ID,
                 message_ids=result["message_id"]
@@ -91,6 +85,26 @@ async def search_movie(client, message: Message):
         except Exception as e:
             await message.reply_text(f"ফরওয়ার্ড করতে সমস্যা: {e}")
     else:
+        # Log the user's request in MongoDB
+        not_found_collection.update_one(
+            {"query": query.lower()},
+            {
+                "$addToSet": {"users": message.from_user.id},  # Add user ID to the query
+                "$set": {"query": query.lower()}  # Store the query
+            },
+            upsert=True  # If query not found, create a new entry
+        )
+
+        # Notify admin when a user couldn't find a movie
+        for admin_id in ADMINS:
+            try:
+                await client.send_message(
+                    chat_id=admin_id,
+                    text=f"⚠️ ইউজার @{message.from_user.username or message.from_user.id} '{query}' মুভি খুঁজে পায়নি।"
+                )
+            except Exception as e:
+                print(f"Failed to notify admin {admin_id}: {e}")
+
         suggestions = collection.find({"text": {"$regex": query, "$options": "i"}}).limit(5)
         buttons = [
             [InlineKeyboardButton(movie["text"][:30], callback_data=f"id_{movie['message_id']}")]
@@ -101,26 +115,6 @@ async def search_movie(client, message: Message):
         else:
             await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!")
 
-            # Admin Notify
-            for admin_id in ADMINS:
-                try:
-                    await client.send_message(
-                        chat_id=admin_id,
-                        text=f"⚠️ ইউজার @{message.from_user.username or message.from_user.id} '{query}' মুভি খুঁজে পায়নি।"
-                    )
-                except:
-                    pass
-
-            # Log to not_found_collection
-            not_found_collection.update_one(
-                {"query": query.lower()},
-                {
-                    "$addToSet": {"users": message.from_user.id},
-                    "$set": {"query": query.lower()}
-                },
-                upsert=True
-            )
-
 @pyrogram_app.on_callback_query(filters.regex("^id_"))
 async def suggestion_click(client, callback_query: CallbackQuery):
     message_id = int(callback_query.data.replace("id_", ""))
@@ -128,7 +122,7 @@ async def suggestion_click(client, callback_query: CallbackQuery):
 
     if result:
         try:
-            sent = await client.forward_messages(
+            sent = await pyrogram_app.forward_messages(
                 chat_id=callback_query.message.chat.id,
                 from_chat_id=CHANNEL_ID,
                 message_ids=message_id
@@ -153,18 +147,14 @@ async def save_channel_messages(client, message: Message):
             )
             print(f"Saved: {text[:40]}...")
 
-            # Check if any user requested this movie
-            match = not_found_collection.find_one({"query": text.lower()})
-            if match and "users" in match:
-                for user_id in match["users"]:
-                    try:
-                        await client.send_message(
-                            user_id,
-                            f"✅ আপনি যে '{text}' মুভিটি খুঁজছিলেন তা এখন আপলোড করা হয়েছে! সার্চ করে দেখতে পারেন।"
-                        )
-                    except Exception as e:
-                        print(f"Failed to notify user {user_id}: {e}")
-                not_found_collection.delete_one({"query": text.lower()})
+@pyrogram_app.on_message(filters.private & filters.command("check_requests") & filters.user(ADMINS))
+async def check_requests(client, message: Message):
+    requests = not_found_collection.find()
+    response = "এই মুভিগুলো খোঁজার জন্য রিকোয়েস্ট করা হয়েছে:\n\n"
+    for request in requests:
+        users = ", ".join([str(user) for user in request["users"]])  # User IDs
+        response += f"মুভি: {request['query']}, ইউজাররা: {users}\n"
+    await message.reply_text(response)
 
 # Run the bot
 if __name__ == "__main__":
