@@ -85,17 +85,15 @@ async def search_movie(client, message: Message):
         except Exception as e:
             await message.reply_text(f"ফরওয়ার্ড করতে সমস্যা: {e}")
     else:
-        # Log the user's request in MongoDB
         not_found_collection.update_one(
             {"query": query.lower()},
             {
-                "$addToSet": {"users": message.from_user.id},  # Add user ID to the query
-                "$set": {"query": query.lower()}  # Store the query
+                "$addToSet": {"users": message.from_user.id},
+                "$set": {"query": query.lower()}
             },
-            upsert=True  # If query not found, create a new entry
+            upsert=True
         )
 
-        # Notify admin when a user couldn't find a movie
         for admin_id in ADMINS:
             try:
                 await client.send_message(
@@ -110,10 +108,17 @@ async def search_movie(client, message: Message):
             [InlineKeyboardButton(movie["text"][:30], callback_data=f"id_{movie['message_id']}")]
             for movie in suggestions
         ]
-        if buttons:
+
+        # Add group and channel buttons at the bottom
+        buttons.append([
+            InlineKeyboardButton("➕ Add to Group", url="https://t.me/YourGroupLink"),
+            InlineKeyboardButton("📢 Update Channel", url="https://t.me/YourChannelLink")
+        ])
+
+        if collection.count_documents({"text": {"$regex": query, "$options": "i"}}) > 0:
             await message.reply("আপনি কি নিচের কোনটি খুঁজছেন?", reply_markup=InlineKeyboardMarkup(buttons))
         else:
-            await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!")
+            await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!", reply_markup=InlineKeyboardMarkup(buttons))
 
 @pyrogram_app.on_callback_query(filters.regex("^id_"))
 async def suggestion_click(client, callback_query: CallbackQuery):
@@ -152,9 +157,44 @@ async def check_requests(client, message: Message):
     requests = not_found_collection.find()
     response = "এই মুভিগুলো খোঁজার জন্য রিকোয়েস্ট করা হয়েছে:\n\n"
     for request in requests:
-        users = ", ".join([str(user) for user in request["users"]])  # User IDs
+        users = ", ".join([str(user) for user in request["users"]])
         response += f"মুভি: {request['query']}, ইউজাররা: {users}\n"
     await message.reply_text(response)
+
+# Group support added here
+@pyrogram_app.on_message(filters.group & filters.text & ~filters.command(["start", "help", "stats", "delete_all", "broadcast"]))
+async def group_search_movie(client, message: Message):
+    query = message.text.strip()
+    result = collection.find_one({"text": {"$regex": f"^{query}$", "$options": "i"}})
+
+    if result:
+        try:
+            sent = await pyrogram_app.forward_messages(
+                chat_id=message.chat.id,
+                from_chat_id=CHANNEL_ID,
+                message_ids=result["message_id"]
+            )
+            await asyncio.sleep(300)
+            await sent.delete()
+        except Exception as e:
+            await message.reply_text(f"ফরওয়ার্ড করতে সমস্যা: {e}")
+    else:
+        suggestions = collection.find({"text": {"$regex": query, "$options": "i"}}).limit(5)
+        buttons = [
+            [InlineKeyboardButton(movie["text"][:30], callback_data=f"id_{movie['message_id']}")]
+            for movie in suggestions
+        ]
+
+        # Add group and channel buttons
+        buttons.append([
+            InlineKeyboardButton("➕ Add to Group", url="https://t.me/YourGroupLink"),
+            InlineKeyboardButton("📢 Update Channel", url="https://t.me/YourChannelLink")
+        ])
+
+        if collection.count_documents({"text": {"$regex": query, "$options": "i"}}) > 0:
+            await message.reply("আপনি কি নিচের কোনটি খুঁজছেন?", reply_markup=InlineKeyboardMarkup(buttons))
+        else:
+            await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!", reply_markup=InlineKeyboardMarkup(buttons))
 
 # Run the bot
 if __name__ == "__main__":
