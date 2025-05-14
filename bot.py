@@ -26,7 +26,7 @@ mongo_client = MongoClient(MONGO_URI)
 db = mongo_client["movie_bot"]
 collection = db["movies"]
 user_collection = db["users"]
-not_found_collection = db["not_found"]  # Collection for logging failed movie searches
+not_found_collection = db["not_found"]
 
 pyrogram_app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
@@ -119,7 +119,7 @@ async def search_movie(client, message: Message):
         if collection.count_documents({"text": {"$regex": query, "$options": "i"}}) > 0:
             await message.reply("আপনি কি নিচের কোনটি খুঁজছেন?", reply_markup=InlineKeyboardMarkup(buttons))
         else:
-            await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!")
+            await message.reply(f"দুঃখিত, '{query}' নামে কিছু খুঁজে পাইনি!")
 
 @pyrogram_app.on_callback_query(filters.regex("^id_"))
 async def suggestion_click(client, callback_query: CallbackQuery):
@@ -189,7 +189,7 @@ async def group_search_movie(client, message: Message):
         if collection.count_documents({"text": {"$regex": query, "$options": "i"}}) > 0:
             await message.reply("আপনি কি নিচের কোনটি খুঁজছেন?", reply_markup=InlineKeyboardMarkup(buttons))
         else:
-            await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!")
+            await message.reply(f"দুঃখিত, '{query}' নামে কিছু খুঁজে পাইনি!")
 
 # Run the bot
 if __name__ == "__main__":
