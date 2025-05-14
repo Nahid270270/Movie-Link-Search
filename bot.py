@@ -5,7 +5,7 @@ from http.server import SimpleHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pymongo import MongoClient
-from rapidfuzz import process  # For fuzzy matching
+from rapidfuzz import process
 
 # Start a simple web server for Koyeb health check
 def start_web():
@@ -30,7 +30,6 @@ user_collection = db["users"]
 
 pyrogram_app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# /start command with photo & buttons
 @pyrogram_app.on_message(filters.private & filters.command("start"))
 async def start_handler(client, message: Message):
     user_collection.update_one({"user_id": message.from_user.id}, {"$set": {"user_id": message.from_user.id}}, upsert=True)
@@ -82,46 +81,51 @@ async def broadcast_handler(client, message: Message):
 
     await message.reply_text(f"✅ সফল: {success}\n❌ ব্যর্থ: {failed}")
 
-# Search function with fuzzy matching in private & group
+# Updated search logic with fuzzy matching
 @pyrogram_app.on_message(filters.text & (filters.private | filters.group) & ~filters.command(["start", "help", "stats", "delete_all", "broadcast"]))
 async def search_movie(client, message: Message):
     query = message.text.strip()
-    result = collection.find_one({"text": {"$regex": f"^{query}$", "$options": "i"}})
+    all_titles = [movie["text"] for movie in collection.find({}, {"text": 1}) if "text" in movie]
+    matches = process.extract(query, all_titles, limit=1, score_cutoff=70)
 
-    if result:
-        try:
-            sent = await pyrogram_app.forward_messages(
-                chat_id=message.chat.id,
-                from_chat_id=CHANNEL_ID,
-                message_ids=result["message_id"]
-            )
-            await message.reply_text(
-                f"📂 ফাইল: {result['text']}\n📅 তারিখ: {message.date.strftime('%d %b, %Y')}\n⏰ সময়: {message.date.strftime('%I:%M %p')}\n\n📌 স্ট্যাটাস: ✅ UPLOADED DONE ✅",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔎 গুগলে সার্চ করুন", url=f"https://www.google.com/search?q={result['text']}")],
-                    [InlineKeyboardButton("❌ চেক স্পেলিং", callback_data="check_spelling")],
-                    [InlineKeyboardButton("✴️ CLOSE ✴️", callback_data="close_msg")]
-                ])
-            )
-            await asyncio.sleep(300)
-            await sent.delete()
-        except Exception as e:
-            await message.reply_text(f"ফরওয়ার্ড করতে সমস্যা: {e}")
+    if matches:
+        title = matches[0][0]
+        result = collection.find_one({"text": title})
+        if result:
+            try:
+                sent = await pyrogram_app.forward_messages(
+                    chat_id=message.chat.id,
+                    from_chat_id=CHANNEL_ID,
+                    message_ids=result["message_id"]
+                )
+                await message.reply_text(
+                    f"📂 ফাইল: {result['text']}\n📅 তারিখ: {message.date.strftime('%d %b, %Y')}\n⏰ সময়: {message.date.strftime('%I:%M %p')}\n\n📌 স্ট্যাটাস: ✅ UPLOADED DONE ✅",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔎 গুগলে সার্চ করুন", url=f"https://www.google.com/search?q={result['text']}")],
+                        [InlineKeyboardButton("❌ চেক স্পেলিং", callback_data="check_spelling")],
+                        [InlineKeyboardButton("✴️ CLOSE ✴️", callback_data="close_msg")]
+                    ])
+                )
+                await asyncio.sleep(300)
+                await sent.delete()
+                return
+            except Exception as e:
+                await message.reply_text(f"ফরওয়ার্ড করতে সমস্যা: {e}")
+                return
+
+    # Suggestion if no strong match
+    matches = process.extract(query, all_titles, limit=5, score_cutoff=60)
+    buttons = []
+    for title, _, _ in matches:
+        movie = collection.find_one({"text": title})
+        if movie:
+            buttons.append([InlineKeyboardButton(title[:30], callback_data=f"id_{movie['message_id']}")])
+
+    if buttons:
+        buttons.append([InlineKeyboardButton("✴️ CLOSE ✴️", callback_data="close_msg")])
+        await message.reply("❌ সরাসরি খুঁজে পাইনি!\n\nআপনি কি নিচের কোনটি খুঁজছেন?", reply_markup=InlineKeyboardMarkup(buttons))
     else:
-        all_titles = [movie["text"] for movie in collection.find({}, {"text": 1}) if "text" in movie]
-        matches = process.extract(query, all_titles, limit=5, score_cutoff=60)
-
-        buttons = []
-        for title, _, _ in matches:
-            movie = collection.find_one({"text": title})
-            if movie:
-                buttons.append([InlineKeyboardButton(title[:30], callback_data=f"id_{movie['message_id']}")])
-
-        if buttons:
-            buttons.append([InlineKeyboardButton("✴️ CLOSE ✴️", callback_data="close_msg")])
-            await message.reply("❌ সরাসরি খুঁজে পাইনি!\n\nআপনি কি নিচের কোনটি খুঁজছেন?", reply_markup=InlineKeyboardMarkup(buttons))
-        else:
-            await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!")
+        await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!")
 
 @pyrogram_app.on_callback_query(filters.regex("^id_"))
 async def suggestion_click(client, callback_query: CallbackQuery):
@@ -152,7 +156,6 @@ async def close_msg(client, callback_query: CallbackQuery):
     await callback_query.message.delete()
     await callback_query.answer()
 
-# Channel message save
 @pyrogram_app.on_message(filters.channel)
 async def save_channel_messages(client, message: Message):
     if message.chat.id == CHANNEL_ID:
