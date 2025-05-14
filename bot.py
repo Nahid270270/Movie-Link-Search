@@ -40,7 +40,7 @@ async def start_handler(client, message: Message):
 
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Add to Group", url=f"https://t.me/{client.me.username}?startgroup=true")],
-        [InlineKeyboardButton("🔄 Update Channel", url="https://t.me/YourChannelUsername")]  # <-- এখানে চ্যানেলের ইউজারনেম বসাও
+        [InlineKeyboardButton("🔄 Update Channel", url="https://t.me/HDCineBox")]  # <-- এখানে চ্যানেলের ইউজারনেম বসাও
     ])
 
     await message.reply_text(
