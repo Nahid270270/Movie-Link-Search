@@ -39,11 +39,11 @@ async def start_handler(client, message: Message):
         caption="হ্যালো! আমি মুভি লিংক সার্চ বট!\n\nমুভির নাম লিখো, আমি খুঁজে এনে দিব!",
         reply_markup=InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("গ্রুপ", url="https://t.me/yourgroup"),
-                InlineKeyboardButton("চ্যানেল", url="https://t.me/yourchannel")
+                InlineKeyboardButton("গ্রুপ", url="https://t.me/Terabox_search_group"),
+                InlineKeyboardButton("চ্যানেল", url="https://t.me/HDCineBox")
             ],
             [
-                InlineKeyboardButton("ক্রিয়েটর", url="https://t.me/yourusername"),
+                InlineKeyboardButton("ক্রিয়েটর", url="https://t.me/ctgmovies23"),
                 InlineKeyboardButton("এড গ্রুপে", url="https://t.me/yourbot?startgroup=true")
             ]
         ])
