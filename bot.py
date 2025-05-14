@@ -1,13 +1,12 @@
 import os
 import asyncio
 import threading
-import requests
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pymongo import MongoClient
 
-# Start web server for Koyeb
+# Start a simple web server for Koyeb health check
 def start_web():
     server = HTTPServer(("0.0.0.0", 8000), SimpleHTTPRequestHandler)
     print("Web server running on port 8000")
@@ -15,7 +14,7 @@ def start_web():
 
 threading.Thread(target=start_web).start()
 
-# Bot setup
+# Pyrogram Bot Setup
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -27,45 +26,36 @@ mongo_client = MongoClient(MONGO_URI)
 db = mongo_client["movie_bot"]
 collection = db["movies"]
 user_collection = db["users"]
+not_found_collection = db["not_found"]
 
 pyrogram_app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Start command
-@pyrogram_app.on_message(filters.command("start"))
+@pyrogram_app.on_message(filters.private & filters.command("start"))
 async def start_handler(client, message: Message):
-    user_collection.update_one(
-        {"user_id": message.from_user.id},
-        {"$set": {"user_id": message.from_user.id}},
-        upsert=True
+    user_collection.update_one({"user_id": message.from_user.id}, {"$set": {"user_id": message.from_user.id}}, upsert=True)
+    buttons = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("➕ Add To Group", url=f"https://t.me/{client.me.username}?startgroup=true")],
+            [InlineKeyboardButton("🔄 Update Channel", url="https://t.me/YOUR_CHANNEL_USERNAME")]
+        ]
     )
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Add to Group", url=f"https://t.me/{client.me.username}?startgroup=true")],
-        [InlineKeyboardButton("🔄 Update Channel", url="https://t.me/HDCineBox")]  # <-- Change this
-    ])
-    await message.reply_text(
-        "হ্যালো! আমি মুভি লিংক সার্চ বট!\n\nমুভির নাম লিখো, আমি খুঁজে এনে দিব!",
-        reply_markup=buttons
-    )
+    await message.reply_text("হ্যালো! আমি মুভি লিংক সার্চ বট!\n\nমুভির নাম লিখো, আমি খুঁজে এনে দিব!", reply_markup=buttons)
 
-# Help command
 @pyrogram_app.on_message(filters.private & filters.command("help"))
 async def help_handler(client, message: Message):
     await message.reply_text("**ব্যবহার নির্দেশনা:**\n\nশুধু মুভির নাম লিখে পাঠান, আমি খুঁজে দেবো!\n\nআপনি যদি কিছু না পান, তাহলে অনুরূপ কিছু সাজেস্ট করা হবে।")
 
-# Admin stats
 @pyrogram_app.on_message(filters.private & filters.command("stats") & filters.user(ADMINS))
 async def stats_handler(client, message: Message):
     total_movies = collection.count_documents({})
     total_users = user_collection.count_documents({})
     await message.reply_text(f"মোট মুভি: {total_movies}\nমোট ইউজার: {total_users}")
 
-# Delete all movies (admin)
 @pyrogram_app.on_message(filters.private & filters.command("delete_all") & filters.user(ADMINS))
 async def delete_all_handler(client, message: Message):
     collection.delete_many({})
     await message.reply_text("সব মুভি ডাটাবেজ থেকে মুছে ফেলা হয়েছে।")
 
-# Broadcast message (admin)
 @pyrogram_app.on_message(filters.private & filters.command("broadcast") & filters.user(ADMINS))
 async def broadcast_handler(client, message: Message):
     if not message.reply_to_message:
@@ -84,41 +74,14 @@ async def broadcast_handler(client, message: Message):
 
     await message.reply_text(f"✅ সফল: {success}\n❌ ব্যর্থ: {failed}")
 
-# SPELL CHECK COMMAND using LanguageTool API
-@pyrogram_app.on_message(filters.command("spell"))
-async def spell_check_handler(client, message: Message):
-    if len(message.command) < 2:
-        return await message.reply("স্পেল চেক করার জন্য `/spell <text>` লিখুন।")
-
-    text = message.text.split(None, 1)[1]
-    try:
-        response = requests.post(
-            "https://api.languagetool.org/v2/check",
-            data={"text": text, "language": "en-US"}
-        ).json()
-
-        matches = response.get("matches", [])
-        if not matches:
-            await message.reply("কোনো বানান ভুল পাওয়া যায়নি!")
-        else:
-            reply_text = "**স্পেলিং সংশোধন:**\n\n"
-            for match in matches:
-                word = match['context']['text'][match['context']['offset']:match['context']['offset'] + match['context']['length']]
-                suggestions = ", ".join(match['replacements'][0]['value'] for match in [match] if match['replacements'])
-                reply_text += f"• `{word}` → **{suggestions}**\n"
-            await message.reply(reply_text)
-    except Exception as e:
-        await message.reply(f"স্পেল চেক করতে সমস্যা হচ্ছে:\n{e}")
-
-# Movie search
-@pyrogram_app.on_message(filters.text & ~filters.command(["start", "help", "stats", "delete_all", "broadcast", "spell"]))
+@pyrogram_app.on_message(filters.text & filters.private & ~filters.command(["start", "help", "stats", "delete_all", "broadcast"]))
 async def search_movie(client, message: Message):
     query = message.text.strip()
     result = collection.find_one({"text": {"$regex": f"^{query}$", "$options": "i"}})
 
     if result:
         try:
-            sent = await pyrogram_app.forward_messages(
+            sent = await client.forward_messages(
                 chat_id=message.chat.id,
                 from_chat_id=CHANNEL_ID,
                 message_ids=result["message_id"]
@@ -138,7 +101,26 @@ async def search_movie(client, message: Message):
         else:
             await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!")
 
-# Callback handler
+            # Admin Notify
+            for admin_id in ADMINS:
+                try:
+                    await client.send_message(
+                        chat_id=admin_id,
+                        text=f"⚠️ ইউজার @{message.from_user.username or message.from_user.id} '{query}' মুভি খুঁজে পায়নি।"
+                    )
+                except:
+                    pass
+
+            # Log to not_found_collection
+            not_found_collection.update_one(
+                {"query": query.lower()},
+                {
+                    "$addToSet": {"users": message.from_user.id},
+                    "$set": {"query": query.lower()}
+                },
+                upsert=True
+            )
+
 @pyrogram_app.on_callback_query(filters.regex("^id_"))
 async def suggestion_click(client, callback_query: CallbackQuery):
     message_id = int(callback_query.data.replace("id_", ""))
@@ -146,7 +128,7 @@ async def suggestion_click(client, callback_query: CallbackQuery):
 
     if result:
         try:
-            sent = await pyrogram_app.forward_messages(
+            sent = await client.forward_messages(
                 chat_id=callback_query.message.chat.id,
                 from_chat_id=CHANNEL_ID,
                 message_ids=message_id
@@ -159,7 +141,6 @@ async def suggestion_click(client, callback_query: CallbackQuery):
     else:
         await callback_query.message.reply_text("মুভিটি খুঁজে পাওয়া যায়নি!")
 
-# Channel message saver
 @pyrogram_app.on_message(filters.channel)
 async def save_channel_messages(client, message: Message):
     if message.chat.id == CHANNEL_ID:
@@ -171,6 +152,19 @@ async def save_channel_messages(client, message: Message):
                 upsert=True
             )
             print(f"Saved: {text[:40]}...")
+
+            # Check if any user requested this movie
+            match = not_found_collection.find_one({"query": text.lower()})
+            if match and "users" in match:
+                for user_id in match["users"]:
+                    try:
+                        await client.send_message(
+                            user_id,
+                            f"✅ আপনি যে '{text}' মুভিটি খুঁজছিলেন তা এখন আপলোড করা হয়েছে! সার্চ করে দেখতে পারেন।"
+                        )
+                    except Exception as e:
+                        print(f"Failed to notify user {user_id}: {e}")
+                not_found_collection.delete_one({"query": text.lower()})
 
 # Run the bot
 if __name__ == "__main__":
