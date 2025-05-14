@@ -35,7 +35,7 @@ pyrogram_app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BO
 async def start_handler(client, message: Message):
     user_collection.update_one({"user_id": message.from_user.id}, {"$set": {"user_id": message.from_user.id}}, upsert=True)
     await message.reply_photo(
-        photo="https://telegra.ph/file/0df7f7cb062574a7c6a23.jpg",
+        photo="https://envs.sh/ot1.jpg",
         caption="হ্যালো! আমি মুভি লিংক সার্চ বট!\n\nমুভির নাম লিখো, আমি খুঁজে এনে দিব!",
         reply_markup=InlineKeyboardMarkup([
             [
