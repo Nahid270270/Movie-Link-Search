@@ -68,7 +68,7 @@ async def delete_all_handler(client, message: Message):
 async def broadcast_handler(client, message: Message):
     if not message.reply_to_message:
         return await message.reply_text("ব্রডকাস্ট করার জন্য কোনো মেসেজে রিপ্লাই দিন।")
-    
+
     users = user_collection.find()
     success = 0
     failed = 0
@@ -95,6 +95,14 @@ async def search_movie(client, message: Message):
                 from_chat_id=CHANNEL_ID,
                 message_ids=result["message_id"]
             )
+            await message.reply_text(
+                f"📂 ফাইল: {result['text']}\n📅 তারিখ: {message.date.strftime('%d %b, %Y')}\n⏰ সময়: {message.date.strftime('%I:%M %p')}\n\n📌 স্ট্যাটাস: ✅ UPLOADED DONE ✅",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔎 গুগলে সার্চ করুন", url=f"https://www.google.com/search?q={result['text']}")],
+                    [InlineKeyboardButton("❌ চেক স্পেলিং", callback_data="check_spelling")],
+                    [InlineKeyboardButton("✴️ CLOSE ✴️", callback_data="close_msg")]
+                ])
+            )
             await asyncio.sleep(300)
             await sent.delete()
         except Exception as e:
@@ -110,7 +118,8 @@ async def search_movie(client, message: Message):
                 buttons.append([InlineKeyboardButton(title[:30], callback_data=f"id_{movie['message_id']}")])
 
         if buttons:
-            await message.reply("আপনি কি নিচের কোনটি খুঁজছেন?", reply_markup=InlineKeyboardMarkup(buttons))
+            buttons.append([InlineKeyboardButton("✴️ CLOSE ✴️", callback_data="close_msg")])
+            await message.reply("❌ সরাসরি খুঁজে পাইনি!\n\nআপনি কি নিচের কোনটি খুঁজছেন?", reply_markup=InlineKeyboardMarkup(buttons))
         else:
             await message.reply("দুঃখিত, কিছুই খুঁজে পাইনি!")
 
@@ -133,6 +142,15 @@ async def suggestion_click(client, callback_query: CallbackQuery):
             await callback_query.message.reply_text(f"ফরওয়ার্ড করতে সমস্যা: {e}")
     else:
         await callback_query.message.reply_text("মুভিটি খুঁজে পাওয়া যায়নি!")
+
+@pyrogram_app.on_callback_query(filters.regex("check_spelling"))
+async def spelling_callback(client, callback_query: CallbackQuery):
+    await callback_query.answer("দয়া করে মুভির নামটি ভালোভাবে লিখুন!", show_alert=True)
+
+@pyrogram_app.on_callback_query(filters.regex("close_msg"))
+async def close_msg(client, callback_query: CallbackQuery):
+    await callback_query.message.delete()
+    await callback_query.answer()
 
 # Channel message save
 @pyrogram_app.on_message(filters.channel)
